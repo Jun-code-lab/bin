@@ -106,7 +106,7 @@ function setMarkersFromRows(rows){
       // 내 위치와의 직선거리 안내(가능할 때)
       let distLine = '';
       if (meMarker) {
-        const d = kakao.maps.LatLng.prototype.getDistance(meMarker.getPosition(), marker.getPosition());
+        const d = distanceMeters(latlng, bm.kakaoMarker.getPosition());
         distLine = `<div style="font-size:12px;color:#374151;margin-top:4px;">내 위치까지 약 <b>${metersToText(d)}</b></div>`;
       } else {
         distLine = `<div style="font-size:12px;color:#6b7280;margin-top:4px;">(내 위치 버튼을 먼저 눌러주세요)</div>`;
@@ -305,15 +305,14 @@ function clearNearest() {
 }
 
 function nearestKBinsFrom(latlng, k = 3) {
-  const items = binMarkers.map(bm => {
-    const d = kakao.maps.LatLng.prototype.getDistance(
-      latlng, bm.kakaoMarker.getPosition()
-    );
-    return { marker: bm.kakaoMarker, meters: d, name: bm.meta?.name ?? '휴지통' };
-  });
-  items.sort((a,b) => a.meters - b.meters);
-  return items.slice(0, Math.min(k, items.length));
+  const arr = binMarkers.map(bm => ({
+    bm,
+    d: distanceMeters(latlng, bm.kakaoMarker.getPosition())
+  }));
+  arr.sort((a, b) => a.d - b.d);
+  return arr.slice(0, Math.min(k, arr.length));
 }
+
 
 async function showNearest(latlng, k = 3) {
   clearVisual();
@@ -626,3 +625,4 @@ function setChips(){
   if (markerA) chips.innerHTML += `<span class="chip"><span class="labelA">A</span> ${markerA.getPosition().getLat().toFixed(5)}, ${markerA.getPosition().getLng().toFixed(5)}</span>`;
   if (markerB) chips.innerHTML += `<span class="chip"><span class="labelB">B</span> ${markerB.getPosition().getLat().toFixed(5)}, ${markerB.getPosition().getLng().toFixed(5)}</span>`;
 }
+
