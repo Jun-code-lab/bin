@@ -2,71 +2,53 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <title>서울 휴지통 </title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <link rel="stylesheet" href="./styles.css" />
+  <title>서울 휴지통 – 최소 예시</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { height:100%; margin:0; }
+    #map { position:fixed; inset:0; }
+    .panel {
+      position: fixed; top: 12px; left: 12px; z-index: 10;
+      background: #fff; border-radius: 10px; padding: 10px 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15); max-width: 360px;
+      font-family: system-ui, apple-system, Segoe UI, Roboto, sans-serif; font-size: 14px;
+    }
+    .row { display:flex; gap:8px; margin:6px 0; flex-wrap:wrap; }
+    .btn { padding:6px 10px; border-radius:8px; border:1px solid #ddd; background:#fff; cursor:pointer; }
+    .btn.primary { border-color:#2563eb; color:#2563eb; }
+    .small { color:#6b7280; font-size:12px; }
+    #info { margin-top:6px; color:#374151; }
+  </style>
 </head>
 <body>
   <div id="map"></div>
+
   <div class="panel">
-    <h1>서울 휴지통 · (서울 한정) 검색/임의위치/A↔B 경로</h1>
-    <div class="small">
-      <div style="margin-top:6px;"><span class="pill seoul">구 선택은 <b>서울특별시</b>만 표시</span></div>
-    </div>
     <div class="row">
-      <input id="inpGuSearch" class="input" list="guList" placeholder="구 이름 검색 (예: 서초구, 강남구…)" />
-      <datalist id="guList"></datalist>
-    </div>
-    <div class="row">
-      <select id="selGu" class="select">
-        <option value="">– (서울) 구 선택 –</option>
-      </select>
-    </div>
-    <div class="row">
-      <button id="btnBestInGu" class="btn">선택 구의 “대표(최적)” 휴지통</button>
+      <button id="btnLocate" class="btn primary">◎ 내 위치</button>
       <button id="btnClear" class="btn">지우기</button>
     </div>
-    <div class="row">
-      <button id="btnLocate" class="btn">◎ 내 위치</button>
-      <button id="btnPick" class="btn">⊕ 임의 위치 지정</button>
-    </div>
-    <div class="row">
-      <button id="btnRouteAB" class="btn">A↔B 경로</button>
-      <button id="btnResetAB" class="btn">선택 해제</button>
-    </div>
-    <div id="chips" class="small"></div>
-    <div class="legend" id="info">팁: 위치 기능은 <b>HTTPS</b> 또는 <b>http://localhost</b>에서만 동작합니다.</div>
-    <div class="filebox" id="fileBox">
-      <div class="small" style="margin-top:6px;">파일 직접 선택 (file:// 로 여는 경우)</div>
-      <input type="file" id="fileCsv" accept=".csv" />
-      <input type="file" id="fileGeo" accept=".geojson,.json" />
+    <div id="info" class="small">
+      팁: 위치 기능은 <b>HTTPS</b> 또는 <b>http://localhost</b>에서만 동작합니다.
     </div>
   </div>
 
-  <button id="togglePanelBtn" class="toggle-btn">UI 숨기기</button>
+  <!-- Kakao SDK: autoload=false + geometry/clusterer 로드 -->
+  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=345d6f5567b13749e594420fcceee862&autoload=false&libraries=clusterer,geometry"></script>
 
-  <!-- 외부 라이브러리 -->
-  
-  <!-- ✅ 반드시 https 명시 + autoload=false -->
-<script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=345d6f5567b13749e594420fcceee862&autoload=false&libraries=clusterer,geometry"></script>
+  <!-- 앱 스크립트 -->
+  <script src="./app.js"></script>
 
-<!-- ✅ 외부 라이브러리 (있으면 그대로) -->
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
-
-<!-- ✅ 앱 스크립트: 프로젝트 루트에 app.js가 실제로 존재해야 함 -->
-<script src="./app.js"></script>
-
-<!-- ✅ 카카오맵 로드 트리거: app.js 안에 window.initMap가 정의돼 있어야 함 -->
-<script>
-  kakao.maps.load(() => {
-    if (window.initMap) window.initMap();
-  });
-</script>
-  
-</script>
+  <!-- Kakao SDK 로드 완료 후 initMap 호출 -->
+  <script>
+    kakao.maps.load(() => {
+      if (window.initMap) window.initMap();
+    });
+  </script>
 </body>
 </html>
+
+
 
 
 
