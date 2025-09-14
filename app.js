@@ -66,6 +66,7 @@ function toNumber(v){
   return Number.isFinite(n) ? n : NaN;
 }
 function isWgs84(lat, lon){ return lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132; }
+const metersToText = (m)=> (m>=1000? (m/1000).toFixed(2)+' km' : Math.round(m)+' m');
 
 // =========================
 // 데이터 로드 (CSV/GeoJSON)
@@ -102,10 +103,23 @@ function setMarkersFromRows(rows){
       selectionOverlay.setMap(null);
       currentlyClickedMarker = marker;
 
+      // 내 위치와의 직선거리 안내(가능할 때)
+      let distLine = '';
+      if (meMarker) {
+        const d = kakao.maps.LatLng.prototype.getDistance(meMarker.getPosition(), marker.getPosition());
+        distLine = `<div style="font-size:12px;color:#374151;margin-top:4px;">내 위치까지 약 <b>${metersToText(d)}</b></div>`;
+      } else {
+        distLine = `<div style="font-size:12px;color:#6b7280;margin-top:4px;">(내 위치 버튼을 먼저 눌러주세요)</div>`;
+      }
+
       const content = `
-        <div style="padding:8px; background:white; border-radius:8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display:flex; gap:6px; font-size:12px;">
-          <button class="marker-btn" data-action="setAsA" style="border:1px solid #ddd; background:#fff; padding:4px 8px; border-radius:6px; cursor:pointer;">출발</button>
-          <button class="marker-btn" data-action="setAsB" style="border:1px solid #ddd; background:#fff; padding:4px 8px; border-radius:6px; cursor:pointer;">도착</button>
+        <div style="padding:8px; background:white; border-radius:8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display:flex; flex-direction:column; gap:6px; font-size:12px;">
+          <div style="display:flex; gap:6px;">
+            <button class="marker-btn" data-action="setAsA" style="border:1px solid #ddd; background:#fff; padding:4px 8px; border-radius:6px; cursor:pointer;">출발</button>
+            <button class="marker-btn" data-action="setAsB" style="border:1px solid #ddd; background:#fff; padding:4px 8px; border-radius:6px; cursor:pointer;">도착</button>
+            <button class="marker-btn" data-action="routeFromMe" style="border:1px solid #2563eb; color:#2563eb; background:#fff; padding:4px 8px; border-radius:6px; cursor:pointer;">내 위치→경로</button>
+          </div>
+          ${distLine}
         </div>`;
       selectionOverlay.setContent(content);
       selectionOverlay.setPosition(marker.getPosition());
@@ -412,13 +426,13 @@ document.getElementById('btnLocate').addEventListener('click', async () => {
 });
 
 document.getElementById('btnPick').addEventListener('click', () => {
-  pickMode = !pickMode;
+  let pickMode = window.__pickMode = !window.__pickMode;
   alert(pickMode ? '지도를 클릭해 임의 위치를 지정하세요. (마커는 드래그로 이동 가능)' : '임의 위치 지정을 종료합니다.');
 });
 
 kakao.maps.event.addListener(map, 'click', async (mouseEvent) => {
   selectionOverlay.setMap(null);
-  if (!pickMode) return;
+  if (!window.__pickMode) return;
   const latlng = mouseEvent.latLng;
   ensureManualMarker(latlng);
   setInfo(`<small>임의 위치: ${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}</small>`);
@@ -480,8 +494,8 @@ toggleBtn.addEventListener('click', () => {
   toggleBtn.textContent = panel.classList.contains('hidden') ? 'UI 보이기' : 'UI 숨기기';
 });
 
-// A/B 선택(오버레이 버튼)
-document.addEventListener('click', function(e) {
+// A/B & 경로(내 위치→선택 휴지통)
+document.addEventListener('click', async function(e) {
   if (e.target && e.target.classList.contains('marker-btn')) {
     const action = e.target.dataset.action;
 
@@ -494,6 +508,7 @@ document.addEventListener('click', function(e) {
       selectionOverlay.setMap(null);
       const pos = currentlyClickedMarker.getPosition();
       setInfo(`<small><span class="labelA" style="margin-right:4px;">출발</span> 지점 선택됨: ${pos.getLat().toFixed(5)}, ${pos.getLng().toFixed(5)}</small>`);
+
     } else if (action === 'setAsB') {
       if (!currentlyClickedMarker) return;
       if (markerB) markerB.setImage(defaultMarkerImage);
@@ -501,8 +516,48 @@ document.addEventListener('click', function(e) {
       markerB = currentlyClickedMarker;
       setChips();
       selectionOverlay.setMap(null);
-      const pos = currentlyClickedMarker.getPosition();
-      setInfo(`<small><span class="labelB" style="margin-right:4px;">도착</span> 지점 선택됨: ${pos.getLat().toFixed(5)}, ${pos.getLng().toFixed(5)}</small>`);
+
+      // 내 위치와의 거리도 즉시 안내(가능 시)
+      if (meMarker) {
+        const d = kakao.maps.LatLng.prototype.getDistance(meMarker.getPosition(), markerB.getPosition());
+        setInfo(`<small><span class="labelB" style="margin-right:4px;">도착</span> 지점 선택됨 · 내 위치↔선택 휴지통: <b>${metersToText(d)}</b></small>`);
+      } else {
+        const pos = markerB.getPosition();
+        setInfo(`<small><span class="labelB" style="margin-right:4px;">도착</span> 지점 선택됨: ${pos.getLat().toFixed(5)}, ${pos.getLng().toFixed(5)} · (내 위치 버튼을 먼저 눌러주세요)</small>`);
+      }
+
+    } else if (action === 'routeFromMe') {
+      if (!currentlyClickedMarker) return;
+      if (!meMarker) { alert('먼저 [내 위치]를 눌러 위치를 활성화하세요.'); return; }
+
+      // 내 위치 → 선택 휴지통 경로/거리 안내
+      const A = meMarker.getPosition(), B = currentlyClickedMarker.getPosition();
+      if (routePolyline) routePolyline.setMap(null);
+
+      try {
+        const route = await routeFoot(A, B);
+        if (!route){
+          routePolyline = new kakao.maps.Polyline({ map: map, path: [A, B], strokeWeight: 6, strokeColor: '#FF0000', strokeOpacity: 0.9 });
+          const crow = kakao.maps.LatLng.prototype.getDistance(A, B);
+          setInfo(`<small>직선거리: ${metersToText(crow)} (경로 API 실패)</small>`);
+        } else {
+          const path = route.geometry.coordinates.map(c => new kakao.maps.LatLng(c[1], c[0]));
+          routePolyline = new kakao.maps.Polyline({ map: map, path: path, strokeWeight: 7, strokeColor: '#FF0000', strokeOpacity: 0.95 });
+
+          const bounds = new kakao.maps.LatLngBounds();
+          path.forEach(p => bounds.extend(p));
+          map.setBounds(bounds);
+
+          const mins = Math.round(route.duration / 60);
+          setInfo(`<small>내 위치 → 선택 휴지통 · 약 ${metersToText(route.distance)} · ${mins}분</small>`);
+        }
+      } catch (err) {
+        const crow = kakao.maps.LatLng.prototype.getDistance(A, B);
+        routePolyline = new kakao.maps.Polyline({ map: map, path: [A, B], strokeWeight: 6, strokeColor: '#FF0000', strokeOpacity: 0.9 });
+        setInfo(`<small>직선거리: ${metersToText(crow)} (경로 API 오류)</small>`);
+      }
+
+      selectionOverlay.setMap(null);
     }
   }
 });
