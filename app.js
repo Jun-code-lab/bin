@@ -339,7 +339,8 @@ document.getElementById('btnLocate').addEventListener('click', async () => {
 
     meMarker = new kakao.maps.Marker({
       map: map, position: latlng,
-      image: new kakao.maps.MarkerImage('https://t1.daumcdn.net/map_go/marker/blue_b.png', new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) })
+      image: new kakao.maps.MarkerImage(svgPin('#2563eb'),
+  new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) })
     });
     new kakao.maps.InfoWindow({ content: '현재 위치', removable: true }).open(map, meMarker);
     meCircle = new kakao.maps.Circle({ map: map, center: latlng, radius: pos.coords.accuracy, strokeWeight: 1, strokeColor: '#0070FF', strokeOpacity: 0.7, fillColor: '#0070FF', fillOpacity: 0.2 });
@@ -515,5 +516,6 @@ document.getElementById('fileGeo').addEventListener('change', async (e) => {
   const geo = JSON.parse(text);
   buildGuLayers(geo);
 });
+
 
 
