@@ -14,20 +14,32 @@ let nearestMarkerInfo = null;
 let selectionOverlay = new kakao.maps.CustomOverlay({ yAnchor: 1.2, zIndex: 100, clickable: true });
 let currentlyClickedMarker = null;
 
+const svgPin = (color) =>
+  'data:image/svg+xml;utf8,' + encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 24 34">
+  <defs>
+    <filter id="s" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <path filter="url(#s)" fill="${color}" d="M12 1.5a9 9 0 0 0-9 9c0 6.8 9 20 9 20s9-13.2 9-20a9 9 0 0 0-9-9z"/>
+  <circle cx="12" cy="10.5" r="3.2" fill="#fff"/>
+</svg>`);
+
 let defaultMarkerImage = new kakao.maps.MarkerImage(
-  'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
-  new kakao.maps.Size(24, 35), { offset: new kakao.maps.Point(12, 35) }
+  svgPin('#10b981'), // 기본(초록)
+  new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let redMarkerImage = new kakao.maps.MarkerImage(
-  'https://t1.daumcdn.net/map_go/marker/red_b.png',
+  svgPin('#ef4444'), // 대표/하이라이트
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let imageA = new kakao.maps.MarkerImage(
-  'https://t1.daumcdn.net/map_go/marker/marker_red.png',
+  svgPin('#ef4444'), // 출발 A
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let imageB = new kakao.maps.MarkerImage(
-  'https://t1.daumcdn.net/map_go/marker/marker_blue.png',
+  svgPin('#3b82f6'), // 도착 B
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 
@@ -503,4 +515,5 @@ document.getElementById('fileGeo').addEventListener('change', async (e) => {
   const geo = JSON.parse(text);
   buildGuLayers(geo);
 });
+
 
