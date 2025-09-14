@@ -1,4 +1,6 @@
-// 전역에서 참조될 주요 객체들
+// =========================
+// Kakao Map 기본 설정
+// =========================
 const MAP_CENTER = new kakao.maps.LatLng(37.5665, 126.9780);
 const mapContainer = document.getElementById('map');
 const mapOption = { center: MAP_CENTER, level: 8 };
@@ -6,6 +8,9 @@ const map = new kakao.maps.Map(mapContainer, mapOption);
 
 const clusterer = new kakao.maps.MarkerClusterer({ map: map, averageCenter: true, minLevel: 7 });
 
+// =========================
+// 전역 상태
+// =========================
 const binMarkers = [];
 let meMarker = null, meCircle = null, routePolyline = null, highlightPolygon = null;
 let guPolys = [];
@@ -14,6 +19,7 @@ let nearestMarkerInfo = null;
 let selectionOverlay = new kakao.maps.CustomOverlay({ yAnchor: 1.2, zIndex: 100, clickable: true });
 let currentlyClickedMarker = null;
 
+// SVG 마커(403 방지)
 const svgPin = (color) =>
   'data:image/svg+xml;utf8,' + encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 24 34">
@@ -27,22 +33,25 @@ const svgPin = (color) =>
 </svg>`);
 
 let defaultMarkerImage = new kakao.maps.MarkerImage(
-  svgPin('#10b981'), // 기본(초록)
+  svgPin('#10b981'),
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let redMarkerImage = new kakao.maps.MarkerImage(
-  svgPin('#ef4444'), // 대표/하이라이트
+  svgPin('#ef4444'),
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let imageA = new kakao.maps.MarkerImage(
-  svgPin('#ef4444'), // 출발 A
+  svgPin('#ef4444'),
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 let imageB = new kakao.maps.MarkerImage(
-  svgPin('#3b82f6'), // 도착 B
+  svgPin('#3b82f6'),
   new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) }
 );
 
+// =========================
+// 공용 유틸
+// =========================
 function setInfo(html){ document.getElementById('info').innerHTML = html; }
 function clearVisual(){
   if (routePolyline) { routePolyline.setMap(null); routePolyline = null; }
@@ -58,6 +67,9 @@ function toNumber(v){
 }
 function isWgs84(lat, lon){ return lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132; }
 
+// =========================
+// 데이터 로드 (CSV/GeoJSON)
+// =========================
 async function loadCsvFromUrl(url){
   const res = await fetch(encodeURI(url));
   if (!res.ok) throw new Error('CSV HTTP ' + res.status);
@@ -196,6 +208,9 @@ function highlightGu(name){
   map.setBounds(bounds);
 }
 
+// =========================
+// 이벤트: 구 선택/검색
+// =========================
 document.getElementById('selGu').addEventListener('change', (e) => {
   const name = e.target.value;
   clearVisual();
@@ -212,6 +227,9 @@ document.getElementById('inpGuSearch').addEventListener('change', (e) => {
   }
 });
 
+// =========================
+// 유틸: 구 내부/대표 휴지통
+// =========================
 function binsInGu(name){
   const feats = guPolys.filter(g => g.name === name).map(g => g.feature);
   if (!feats.length) return [];
@@ -239,6 +257,9 @@ function bestBinOfGu(name){
   return bestBin;
 }
 
+// =========================
+// 라우팅 (도보)
+// =========================
 function nearestBinFrom(latlng){
   let bestBin = null, bestD = Infinity;
   binMarkers.forEach(bm => {
@@ -256,45 +277,80 @@ async function routeFoot(src, dst){
   return data.routes[0];
 }
 
-let pickMode = false;
-let manualMarker = null;
-let manualMarkerInfowindow = new kakao.maps.InfoWindow({ content: '임의 위치', removable: true });
+// =========================
+// 가까운 3개 휴지통 기능
+// =========================
+let nearestMarks = [];
+let nearestInfoWindows = [];
 
-function ensureManualMarker(latlng){
-  if (manualMarker){
-    manualMarker.setPosition(latlng);
-  } else {
-    manualMarker = new kakao.maps.Marker({ position: latlng, draggable: true, map: map });
-    kakao.maps.event.addListener(manualMarker, 'dragend', () => {
-      const ll = manualMarker.getPosition();
-      setInfo(`<small>임의 위치: ${ll.getLat().toFixed(6)}, ${ll.getLng().toFixed(6)}</small>`);
+function clearNearest() {
+  nearestMarks.forEach(m => m.setImage(defaultMarkerImage));
+  nearestMarks = [];
+  nearestInfoWindows.forEach(iw => iw.close && iw.close());
+  nearestInfoWindows = [];
+}
+
+function nearestKBinsFrom(latlng, k = 3) {
+  const items = binMarkers.map(bm => {
+    const d = kakao.maps.LatLng.prototype.getDistance(
+      latlng, bm.kakaoMarker.getPosition()
+    );
+    return { marker: bm.kakaoMarker, meters: d, name: bm.meta?.name ?? '휴지통' };
+  });
+  items.sort((a,b) => a.meters - b.meters);
+  return items.slice(0, Math.min(k, items.length));
+}
+
+async function showNearest(latlng, k = 3) {
+  clearVisual();
+  clearNearest();
+
+  const list = nearestKBinsFrom(latlng, k);
+  if (!list.length) { alert('휴지통 데이터가 없습니다.'); return; }
+
+  // #1은 빨강
+  list[0].marker.setImage(redMarkerImage);
+  nearestMarks.push(list[0].marker);
+
+  // 라벨 표시
+  list.forEach((it, idx) => {
+    const iw = new kakao.maps.InfoWindow({
+      content: `<div style="font-size:12px;padding:4px 6px;">#${idx+1} ${it.name}<br>${Math.round(it.meters)} m</div>`
     });
+    iw.open(map, it.marker);
+    nearestInfoWindows.push(iw);
+  });
+
+  // #1 경로
+  const dst = list[0].marker.getPosition();
+  const route = await routeFoot(latlng, dst);
+  if (!route) {
+    routePolyline = new kakao.maps.Polyline({
+      map: map, path: [latlng, dst], strokeWeight: 6, strokeColor: '#FF0000', strokeOpacity: 0.9
+    });
+    setInfo(`<small>가까운 3곳 중 #1까지 직선 ${Math.round(list[0].meters)} m (경로 API 실패)</small>`);
+  } else {
+    const path = route.geometry.coordinates.map(c => new kakao.maps.LatLng(c[1], c[0]));
+    routePolyline = new kakao.maps.Polyline({
+      map: map, path, strokeWeight: 7, strokeColor: '#FF0000', strokeOpacity: 0.95
+    });
+    const mins = Math.round(route.duration / 60);
+    setInfo(`<small>가까운 3곳:
+      #1 ${Math.round(list[0].meters)} m · ${mins}분,
+      #2 ${list[1] ? Math.round(list[1].meters) + ' m' : '-'},
+      #3 ${list[2] ? Math.round(list[2].meters) + ' m' : '-'}</small>`);
   }
-  manualMarkerInfowindow.open(map, manualMarker);
-  return manualMarker;
+
+  // 화면 범위
+  const bounds = new kakao.maps.LatLngBounds();
+  bounds.extend(latlng);
+  list.forEach(it => bounds.extend(it.marker.getPosition()));
+  map.setBounds(bounds);
 }
 
-let markerA = null, markerB = null;
-
-function resetAB(){
-  if (markerA) { markerA.setImage(defaultMarkerImage); }
-  if (markerB) { markerB.setImage(defaultMarkerImage); }
-  markerA = markerB = null;
-  setChips();
-  if (routePolyline) routePolyline.setMap(null);
-
-  clusterer.clear();
-  const allKakaoMarkers = binMarkers.map(bm => bm.kakaoMarker);
-  clusterer.addMarkers(allKakaoMarkers);
-}
-function setChips(){
-  const chips = document.getElementById('chips');
-  chips.innerHTML = '';
-  if (markerA) chips.innerHTML += `<span class="chip"><span class="labelA">A</span> ${markerA.getPosition().getLat().toFixed(5)}, ${markerA.getPosition().getLng().toFixed(5)}</span>`;
-  if (markerB) chips.innerHTML += `<span class="chip"><span class="labelB">B</span> ${markerB.getPosition().getLat().toFixed(5)}, ${markerB.getPosition().getLng().toFixed(5)}</span>`;
-}
-
-// 초기 로드
+// =========================
+/* 초기 로드 */
+// =========================
 (async function init(){
   const q = new URLSearchParams(location.search);
   const csvName = q.get('csv') || '주소 수정.csv';
@@ -314,7 +370,9 @@ function setChips(){
   }
 })();
 
-// --- 이벤트 핸들러 ---
+// =========================
+// 버튼/지도 이벤트
+// =========================
 document.getElementById('btnBestInGu').addEventListener('click', async () => {
   const name = document.getElementById('selGu').value;
   if (!name) { alert('먼저 구를 선택하세요.'); return; }
@@ -340,38 +398,14 @@ document.getElementById('btnLocate').addEventListener('click', async () => {
     meMarker = new kakao.maps.Marker({
       map: map, position: latlng,
       image: new kakao.maps.MarkerImage(svgPin('#2563eb'),
-  new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) })
+        new kakao.maps.Size(30, 42), { offset: new kakao.maps.Point(15, 42) })
     });
     new kakao.maps.InfoWindow({ content: '현재 위치', removable: true }).open(map, meMarker);
     meCircle = new kakao.maps.Circle({ map: map, center: latlng, radius: pos.coords.accuracy, strokeWeight: 1, strokeColor: '#0070FF', strokeOpacity: 0.7, fillColor: '#0070FF', fillOpacity: 0.2 });
     map.setLevel(3, { anchor: latlng });
 
-    clearVisual();
-    const { marker, meters } = nearestBinFrom(latlng);
-    if (!marker){ alert('휴지통 데이터가 없습니다.'); return; }
-
-    if (nearestMarkerInfo && nearestMarkerInfo.marker) nearestMarkerInfo.marker.setImage(defaultMarkerImage);
-    marker.setImage(redMarkerImage);
-    nearestMarkerInfo = { marker: marker, meters: meters };
-
-    const route = await routeFoot(latlng, marker.getPosition());
-    if (!route){
-      routePolyline = new kakao.maps.Polyline({ map: map, path: [latlng, marker.getPosition()], strokeWeight: 6, strokeColor: '#FF0000', strokeOpacity: 0.9 });
-      setInfo(`<small>직선거리: ${Math.round(meters)} m (경로 API 실패)</small>`);
-      return;
-    }
-
-    const path = route.geometry.coordinates.map(c => new kakao.maps.LatLng(c[1], c[0]));
-    routePolyline = new kakao.maps.Polyline({ map: map, path: path, strokeWeight: 7, strokeColor: '#FF0000', strokeOpacity: 0.95 });
-
-    if (path && path.length > 0) {
-      const bounds = new kakao.maps.LatLngBounds();
-      path.forEach(point => bounds.extend(point));
-      map.setBounds(bounds);
-    }
-
-    const mins = Math.round(route.duration / 60);
-    setInfo(`<small>도보 약 ${Math.round(route.distance)} m · ${mins}분</small>`);
+    // 가까운 3개 표시 + #1 경로
+    await showNearest(latlng, 3);
   }, (err) => {
     alert('위치 접근 실패: ' + err.message + '\n(HTTPS 또는 http://localhost 로 열어주세요)');
   }, { enableHighAccuracy: true, timeout: 10000 });
@@ -389,31 +423,8 @@ kakao.maps.event.addListener(map, 'click', async (mouseEvent) => {
   ensureManualMarker(latlng);
   setInfo(`<small>임의 위치: ${latlng.getLat().toFixed(6)}, ${latlng.getLng().toFixed(6)}</small>`);
 
-  clearVisual();
-  const { marker, meters } = nearestBinFrom(latlng);
-  if (!marker){ alert('휴지통 데이터가 없습니다.'); return; }
-
-  if (nearestMarkerInfo && nearestMarkerInfo.marker) nearestMarkerInfo.marker.setImage(defaultMarkerImage);
-  marker.setImage(redMarkerImage);
-  nearestMarkerInfo = { marker: marker, meters: meters };
-
-  const route = await routeFoot(latlng, marker.getPosition());
-  if (!route){
-    routePolyline = new kakao.maps.Polyline({ map: map, path: [latlng, marker.getPosition()], strokeWeight: 6, strokeColor: '#FF0000', strokeOpacity: 0.9 });
-    setInfo(`<small>직선거리: ${Math.round(meters)} m (경로 API 실패)</small>`);
-    return;
-  }
-  const path = route.geometry.coordinates.map(c => new kakao.maps.LatLng(c[1], c[0]));
-  routePolyline = new kakao.maps.Polyline({ map: map, path: path, strokeWeight: 7, strokeColor: '#FF0000', strokeOpacity: 0.95 });
-
-  if (path && path.length > 0) {
-    const bounds = new kakao.maps.LatLngBounds();
-    path.forEach(point => bounds.extend(point));
-    map.setBounds(bounds);
-  }
-
-  const mins = Math.round(route.duration / 60);
-  setInfo(`<small>도보 약 ${Math.round(route.distance)} m · ${mins}분</small>`);
+  // 가까운 3개 표시 + #1 경로
+  await showNearest(latlng, 3);
 });
 
 document.getElementById('btnResetAB').addEventListener('click', resetAB);
@@ -454,6 +465,7 @@ document.getElementById('btnRouteAB').addEventListener('click', async () => {
 
 document.getElementById('btnClear').addEventListener('click', () => {
   clearVisual();
+  clearNearest(); // 가까운 3개 라벨/마커 원복
   if (meMarker) { meMarker.setMap(null); meMarker = null; }
   if (meCircle) { meCircle.setMap(null); meCircle = null; }
   if (manualMarker) { manualMarker.setMap(null); manualMarker = null; manualMarkerInfowindow.close(); }
@@ -468,7 +480,7 @@ toggleBtn.addEventListener('click', () => {
   toggleBtn.textContent = panel.classList.contains('hidden') ? 'UI 보이기' : 'UI 숨기기';
 });
 
-// 마커 오버레이 버튼(A/B) 위임 이벤트
+// A/B 선택(오버레이 버튼)
 document.addEventListener('click', function(e) {
   if (e.target && e.target.classList.contains('marker-btn')) {
     const action = e.target.dataset.action;
@@ -495,7 +507,9 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// 파일 업로드 핸들러
+// =========================
+// 파일 업로드 (file:// 대비)
+// =========================
 function readTextFile(file){
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -517,5 +531,43 @@ document.getElementById('fileGeo').addEventListener('change', async (e) => {
   buildGuLayers(geo);
 });
 
+// =========================
+// A/B 선택 & 보조 유틸
+// =========================
+let pickMode = false;
+let manualMarker = null;
+let manualMarkerInfowindow = new kakao.maps.InfoWindow({ content: '임의 위치', removable: true });
 
+function ensureManualMarker(latlng){
+  if (manualMarker){
+    manualMarker.setPosition(latlng);
+  } else {
+    manualMarker = new kakao.maps.Marker({ position: latlng, draggable: true, map: map });
+    kakao.maps.event.addListener(manualMarker, 'dragend', () => {
+      const ll = manualMarker.getPosition();
+      setInfo(`<small>임의 위치: ${ll.getLat().toFixed(6)}, ${ll.getLng().toFixed(6)}</small>`);
+    });
+  }
+  manualMarkerInfowindow.open(map, manualMarker);
+  return manualMarker;
+}
 
+let markerA = null, markerB = null;
+
+function resetAB(){
+  if (markerA) { markerA.setImage(defaultMarkerImage); }
+  if (markerB) { markerB.setImage(defaultMarkerImage); }
+  markerA = markerB = null;
+  setChips();
+  if (routePolyline) routePolyline.setMap(null);
+
+  clusterer.clear();
+  const allKakaoMarkers = binMarkers.map(bm => bm.kakaoMarker);
+  clusterer.addMarkers(allKakaoMarkers);
+}
+function setChips(){
+  const chips = document.getElementById('chips');
+  chips.innerHTML = '';
+  if (markerA) chips.innerHTML += `<span class="chip"><span class="labelA">A</span> ${markerA.getPosition().getLat().toFixed(5)}, ${markerA.getPosition().getLng().toFixed(5)}</span>`;
+  if (markerB) chips.innerHTML += `<span class="chip"><span class="labelB">B</span> ${markerB.getPosition().getLat().toFixed(5)}, ${markerB.getPosition().getLng().toFixed(5)}</span>`;
+}
