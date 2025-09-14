@@ -78,11 +78,11 @@ function toNumber(v){
 function isWgs84(lat, lon){ return lat >= 33 && lat <= 39 && lon >= 124 && lon <= 132; }
 const metersToText = (m)=> (m>=1000? (m/1000).toFixed(2)+' km' : Math.round(m)+' m');
 
-// 두 LatLng 사이 직선거리(m) — Kakao Polyline.getLength 사용
+// 두 LatLng 사이 직선거리(m) — 
 function distanceMeters(a, b) {
-  const line = new kakao.maps.Polyline({ path: [a, b] });
-  return line.getLength();
+  return kakao.maps.geometry.spherical.computeDistanceBetween(a, b);
 }
+
 
 /* =========================
  * 데이터 로드 (CSV/GeoJSON)
@@ -607,3 +607,4 @@ document.addEventListener('click', async function(e) {
     selectionOverlay.setMap(null);
   }
 });
+
