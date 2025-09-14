@@ -11,7 +11,7 @@ let meMarker = null, meCircle = null, routePolyline = null, highlightPolygon = n
 let guPolys = [];
 let nearestMarkerInfo = null;
 
-let selectionOverlay = new kakao.maps.CustomOverlay({ yAnchor: 1.2, zIndex: 100 });
+let selectionOverlay = new kakao.maps.CustomOverlay({ yAnchor: 1.2, zIndex: 100, clickable: true });
 let currentlyClickedMarker = null;
 
 let defaultMarkerImage = new kakao.maps.MarkerImage(
@@ -503,3 +503,4 @@ document.getElementById('fileGeo').addEventListener('change', async (e) => {
   const geo = JSON.parse(text);
   buildGuLayers(geo);
 });
+
